@@ -4,6 +4,7 @@ import gspread
 import os
 from datetime import datetime
 import requests
+import yfinance as yf
 
 # =========================
 # TELEGRAM CONFIG
@@ -25,7 +26,7 @@ def send_telegram_message(text):
 
     try:
         r = requests.post(url, data=payload)
-        print("📨 Telegram:", r.status_code, r.text)
+        print("📨 Telegram:", r.status_code)
     except Exception as e:
         print("❌ Telegram error:", e)
 
@@ -36,7 +37,7 @@ print("🚀 Running scanner...")
 subprocess.run(["python", "nse_scanning.py"])
 
 # =========================
-# CHECK CSV
+# LOAD BUY CANDIDATES
 # =========================
 if not os.path.exists("buy_candidates.csv"):
     print("❌ buy_candidates.csv not found")
@@ -44,15 +45,12 @@ if not os.path.exists("buy_candidates.csv"):
 
 df = pd.read_csv("buy_candidates.csv")
 
-print("\n📊 RAW DATA:")
-print(df)
-
 if df.empty:
-    print("❌ No stocks from scanner")
+    print("❌ No BUY candidates")
     exit()
 
 # =========================
-# CLEAN DATA
+# CLEAN & FILTER
 # =========================
 required_cols = ["Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
 
@@ -60,112 +58,90 @@ for col in required_cols:
     if col not in df.columns:
         df[col] = 0
 
-for col in required_cols:
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+df[required_cols] = df[required_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
 
-# =========================
-# FILTER LOGIC
-# =========================
 df = df[(df["Win%"] >= 50) & (df["Total Trades"] >= 3)]
 
-print(f"\n🎯 After filter: {len(df)} stocks")
-
 if df.empty:
-    print("⚠️ No strong stocks → uploading ALL for debug")
+    print("⚠️ No strong BUY → using all")
     df = pd.read_csv("buy_candidates.csv")
 
 # =========================
 # GOOGLE SHEETS AUTH
 # =========================
-print("\n🔐 Loading credentials from Railway ENV...")
+creds_dict = {
+    "type": os.environ.get("type"),
+    "project_id": os.environ.get("project_id"),
+    "private_key_id": os.environ.get("private_key_id"),
+    "private_key": os.environ.get("private_key").replace("\\n", "\n"),
+    "client_email": os.environ.get("client_email"),
+    "client_id": os.environ.get("client_id"),
+    "auth_uri": os.environ.get("auth_uri"),
+    "token_uri": os.environ.get("token_uri"),
+    "auth_provider_x509_cert_url": os.environ.get("auth_provider_x509_cert_url"),
+    "client_x509_cert_url": os.environ.get("client_x509_cert_url")
+}
 
-try:
-    creds_dict = {
-        "type": os.environ.get("type"),
-        "project_id": os.environ.get("project_id"),
-        "private_key_id": os.environ.get("private_key_id"),
-        "private_key": os.environ.get("private_key").replace("\\n", "\n"),
-        "client_email": os.environ.get("client_email"),
-        "client_id": os.environ.get("client_id"),
-        "auth_uri": os.environ.get("auth_uri"),
-        "token_uri": os.environ.get("token_uri"),
-        "auth_provider_x509_cert_url": os.environ.get("auth_provider_x509_cert_url"),
-        "client_x509_cert_url": os.environ.get("client_x509_cert_url")
-    }
-
-    gc = gspread.service_account_from_dict(creds_dict)
-    print("✅ Credentials loaded successfully")
-
-except Exception as e:
-    print("❌ Credential error:", e)
-    exit()
+gc = gspread.service_account_from_dict(creds_dict)
+sheet = gc.open("PARABOLIC SAR").worksheet("DaySAR")
 
 # =========================
-# OPEN SHEET
-# =========================
-SHEET_FILE = "PARABOLIC SAR"
-WORKSHEET_NAME = "DaySAR"
-
-try:
-    sh = gc.open(SHEET_FILE)
-    sheet = sh.worksheet(WORKSHEET_NAME)
-    print(f"✅ Connected to {SHEET_FILE} → {WORKSHEET_NAME}")
-except Exception as e:
-    print("❌ Sheet open error:", e)
-    exit()
-
-# =========================
-# AVOID DUPLICATES (CHECK EXISTING)
+# BUY ALERTS (NO SHEET UPDATE)
 # =========================
 existing_records = sheet.get_all_records()
 
-today = datetime.now().strftime("%Y-%m-%d")
-existing_today = set()
-
-for rec in existing_records:
-    if str(rec.get("Date", "")) == today:
-        existing_today.add(str(rec.get("Stock", "")).strip().upper())
-
-print("📌 Already uploaded today:", existing_today)
-
-# =========================
-# PREPARE NEW ROWS
-# =========================
-now = datetime.now()
-new_rows = []
+existing_today = {
+    str(r["Stock"]).upper()
+    for r in existing_records
+    if str(r["Date"]) == datetime.now().strftime("%Y-%m-%d")
+}
 
 for _, row in df.iterrows():
-    stock = str(row["Stock"]).strip().upper()
+    stock = row["Stock"].upper()
+    price = row["Price"]
 
-    if stock in existing_today:
-        print(f"⏭️ Skipping duplicate: {stock}")
-        continue
-
-    new_rows.append([
-        now.strftime("%Y-%m-%d"),
-        now.strftime("%H:%M"),
-        stock,
-        row["Price"],
-        int(row["Total Trades"]),
-        int(row["Wins"]),
-        int(row["Losses"]),
-        int(row["Timeout"]),
-        round(row["Win%"], 2),
-        "Python System"
-    ])
+    if stock not in existing_today:
+        send_telegram_message(f"🟢 BUY {stock} @ ₹{price}")
 
 # =========================
-# UPLOAD TO SHEETS + TELEGRAM
+# SELL LOGIC (FROM SHEET DATA)
 # =========================
-if new_rows:
-    sheet.append_rows(new_rows)
-    print(f"\n🚀 Uploaded {len(new_rows)} rows")
+print("🔍 Checking SELL conditions...")
 
-    for r in new_rows:
-        msg = f"📌 {r[2]} | ₹{r[3]}"
-        send_telegram_message(msg)
+today = datetime.now()
 
-else:
-    print("❌ No new stocks to upload")
+for rec in existing_records:
+    try:
+        stock = rec["Stock"]
+        buy_price = float(rec["Price"])
+        buy_date = datetime.strptime(rec["Date"], "%Y-%m-%d")
+
+        data = yf.Ticker(stock + ".NS").history(period="1d")
+        if data.empty:
+            continue
+
+        current_price = data["Close"].iloc[-1]
+
+        target = buy_price * 1.25
+        stoploss = buy_price * 0.85
+        days = (today - buy_date).days
+
+        if current_price >= target:
+            send_telegram_message(
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n🎯 TARGET HIT"
+            )
+
+        elif current_price <= stoploss:
+            send_telegram_message(
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n🛑 STOP LOSS"
+            )
+
+        elif days >= 200:
+            send_telegram_message(
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n⏳ TIME EXIT (200 Days)"
+            )
+
+    except Exception as e:
+        print("Error:", e)
 
 print("✅ DONE")
