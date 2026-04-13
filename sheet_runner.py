@@ -115,16 +115,36 @@ except Exception as e:
     exit()
 
 # =========================
+# AVOID DUPLICATES (CHECK EXISTING)
+# =========================
+existing_records = sheet.get_all_records()
+
+today = datetime.now().strftime("%Y-%m-%d")
+existing_today = set()
+
+for rec in existing_records:
+    if str(rec.get("Date", "")) == today:
+        existing_today.add(str(rec.get("Stock", "")).strip().upper())
+
+print("📌 Already uploaded today:", existing_today)
+
+# =========================
 # PREPARE NEW ROWS
 # =========================
 now = datetime.now()
 new_rows = []
 
 for _, row in df.iterrows():
+    stock = str(row["Stock"]).strip().upper()
+
+    if stock in existing_today:
+        print(f"⏭️ Skipping duplicate: {stock}")
+        continue
+
     new_rows.append([
         now.strftime("%Y-%m-%d"),
         now.strftime("%H:%M"),
-        str(row["Stock"]).strip(),
+        stock,
         row["Price"],
         int(row["Total Trades"]),
         int(row["Wins"]),
@@ -135,20 +155,17 @@ for _, row in df.iterrows():
     ])
 
 # =========================
-# UPLOAD TO SHEETS
+# UPLOAD TO SHEETS + TELEGRAM
 # =========================
 if new_rows:
     sheet.append_rows(new_rows)
     print(f"\n🚀 Uploaded {len(new_rows)} rows")
 
-    # =========================
-# SEND TELEGRAM ALERT (SEPARATE MESSAGES)
-# =========================
-for r in new_rows:
-    msg = f"📌 {r[2]} | ₹{r[3]}"
-    send_telegram_message(msg)
+    for r in new_rows:
+        msg = f"📌 {r[2]} | ₹{r[3]}"
+        send_telegram_message(msg)
 
 else:
-    print("❌ Nothing to upload")
+    print("❌ No new stocks to upload")
 
 print("✅ DONE")
