@@ -1,8 +1,9 @@
-﻿import subprocess
+import subprocess
 import pandas as pd
 import gspread
 import os
-from datetime import datetime, timedelta
+import json
+from datetime import datetime
 
 # =========================
 # RUN SCANNER
@@ -39,7 +40,7 @@ for col in required_cols:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 # =========================
-# FILTER (RELAXED)
+# FILTER
 # =========================
 df = df[(df["Win%"] >= 50) & (df["Total Trades"] >= 3)]
 
@@ -50,15 +51,39 @@ if df.empty:
     df = pd.read_csv("buy_candidates.csv")
 
 # =========================
-# GOOGLE SHEETS
+# GOOGLE SHEETS AUTH
 # =========================
-import json
-import os
-import json
-import gspread
+raw = os.environ.get("GOOGLE_CREDENTIALS")
 
-creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+print("\n🔍 ENV CHECK")
+print("Exists:", raw is not None)
+if not raw:
+    print("❌ GOOGLE_CREDENTIALS not found in environment")
+    exit()
+
+print("Starts with:", repr(raw[:30]))
+print("Ends with:", repr(raw[-30:]))
+
+try:
+    creds_dict = json.loads(raw)
+except Exception as e:
+    print("❌ JSON LOAD ERROR:", e)
+    exit()
+
 gc = gspread.service_account_from_dict(creds_dict)
+
+# =========================
+# OPEN SHEET (FIXED)
+# =========================
+SHEET_NAME = "DaySAR"  # <-- CHANGE THIS
+
+try:
+    sh = gc.open(SHEET_NAME)
+    sheet = sh.sheet1
+    print("✅ Google Sheet connected")
+except Exception as e:
+    print("❌ Could not open sheet:", e)
+    exit()
 
 # =========================
 # EXISTING DATA
