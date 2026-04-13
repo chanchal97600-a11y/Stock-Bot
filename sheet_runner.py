@@ -2,7 +2,6 @@ import subprocess
 import pandas as pd
 import gspread
 import os
-import json
 from datetime import datetime
 
 # =========================
@@ -51,24 +50,30 @@ if df.empty:
     df = pd.read_csv("buy_candidates.csv")
 
 # =========================
-# GOOGLE SHEETS AUTH
+# GOOGLE SHEETS AUTH (FIXED)
 # =========================
-raw = os.environ.get("GOOGLE_CREDENTIALS")
-
-print("\n🔍 ENV CHECK")
-print("Exists:", raw is not None)
-
-if not raw:
-    print("❌ GOOGLE_CREDENTIALS missing")
-    exit()
+print("\n🔐 Loading credentials from Railway ENV...")
 
 try:
-    creds_dict = json.loads(raw)
-except Exception as e:
-    print("❌ Failed to load JSON:", e)
-    exit()
+    creds_dict = {
+        "type": os.environ.get("type"),
+        "project_id": os.environ.get("project_id"),
+        "private_key_id": os.environ.get("private_key_id"),
+        "private_key": os.environ.get("private_key").replace("\\n", "\n"),
+        "client_email": os.environ.get("client_email"),
+        "client_id": os.environ.get("client_id"),
+        "auth_uri": os.environ.get("auth_uri"),
+        "token_uri": os.environ.get("token_uri"),
+        "auth_provider_x509_cert_url": os.environ.get("auth_provider_x509_cert_url"),
+        "client_x509_cert_url": os.environ.get("client_x509_cert_url")
+    }
 
-gc = gspread.service_account_from_dict(creds_dict)
+    gc = gspread.service_account_from_dict(creds_dict)
+    print("✅ Credentials loaded successfully")
+
+except Exception as e:
+    print("❌ Credential error:", e)
+    exit()
 
 # =========================
 # OPEN SHEET
