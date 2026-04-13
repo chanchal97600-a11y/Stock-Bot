@@ -53,7 +53,12 @@ if df.empty:
 # GOOGLE SHEETS
 # =========================
 import json
-gc = gspread.service_account(filename="Credential.json")
+import os
+import json
+import gspread
+
+creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+gc = gspread.service_account_from_dict(creds_dict)
 
 # =========================
 # EXISTING DATA
