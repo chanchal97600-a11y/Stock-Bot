@@ -3,6 +3,31 @@ import pandas as pd
 import gspread
 import os
 from datetime import datetime
+import requests
+
+# =========================
+# TELEGRAM CONFIG
+# =========================
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHANNEL = os.environ.get("TELEGRAM_CHANNEL")
+
+def send_telegram_message(text):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHANNEL:
+        print("⚠️ Telegram variables missing")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHANNEL,
+        "text": text,
+        "parse_mode": "HTML"
+    }
+
+    try:
+        r = requests.post(url, data=payload)
+        print("📨 Telegram:", r.status_code, r.text)
+    except Exception as e:
+        print("❌ Telegram error:", e)
 
 # =========================
 # RUN SCANNER
@@ -50,7 +75,7 @@ if df.empty:
     df = pd.read_csv("buy_candidates.csv")
 
 # =========================
-# GOOGLE SHEETS AUTH (FIXED)
+# GOOGLE SHEETS AUTH
 # =========================
 print("\n🔐 Loading credentials from Railway ENV...")
 
@@ -90,24 +115,6 @@ except Exception as e:
     exit()
 
 # =========================
-# READ EXISTING DATA
-# =========================
-all_data = sheet.get_all_values()
-
-header = [
-    "Date", "Time", "Stock", "Price",
-    "Total Trades", "Wins", "Losses",
-    "Timeout", "Win%", "Source"
-]
-
-if all_data:
-    rows = all_data[1:]
-    rows = [r[:10] + [""]*(10-len(r)) for r in rows]
-    history = pd.DataFrame(rows, columns=header)
-else:
-    history = pd.DataFrame(columns=header)
-
-# =========================
 # PREPARE NEW ROWS
 # =========================
 now = datetime.now()
@@ -127,16 +134,23 @@ for _, row in df.iterrows():
         "Python System"
     ])
 
-print("\n📤 Rows to upload:")
-for r in new_rows:
-    print(r)
-
 # =========================
-# UPLOAD
+# UPLOAD TO SHEETS
 # =========================
 if new_rows:
     sheet.append_rows(new_rows)
     print(f"\n🚀 Uploaded {len(new_rows)} rows")
+
+    # =========================
+    # SEND TELEGRAM ALERT
+    # =========================
+    msg = "📊 <b>Stock Scanner Alert</b>\n\n"
+
+    for r in new_rows:
+        msg += f"📌 {r[2]} | Win% {r[8]} | ₹{r[3]}\n"
+
+    send_telegram_message(msg)
+
 else:
     print("❌ Nothing to upload")
 
