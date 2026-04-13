@@ -142,13 +142,10 @@ if new_rows:
     print(f"\n🚀 Uploaded {len(new_rows)} rows")
 
     # =========================
-    # SEND TELEGRAM ALERT
-    # =========================
-    msg = "📊 <b>Stock Scanner Alert</b>\n\n"
-
-    for r in new_rows:
-        msg += f"📌 {r[2]} | Win% {r[8]} | ₹{r[3]}\n"
-
+# SEND TELEGRAM ALERT (SEPARATE MESSAGES)
+# =========================
+for r in new_rows:
+    msg = f"📌 {r[2]} | ₹{r[3]}"
     send_telegram_message(msg)
 
 else:
