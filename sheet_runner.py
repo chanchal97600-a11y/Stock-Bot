@@ -15,7 +15,7 @@ subprocess.run(["python", "nse_scanning.py"])
 # CHECK CSV
 # =========================
 if not os.path.exists("buy_candidates.csv"):
-    print("❌ CSV not found")
+    print("❌ buy_candidates.csv not found")
     exit()
 
 df = pd.read_csv("buy_candidates.csv")
@@ -40,7 +40,7 @@ for col in required_cols:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 # =========================
-# FILTER
+# FILTER LOGIC
 # =========================
 df = df[(df["Win%"] >= 50) & (df["Total Trades"] >= 3)]
 
@@ -57,36 +57,35 @@ raw = os.environ.get("GOOGLE_CREDENTIALS")
 
 print("\n🔍 ENV CHECK")
 print("Exists:", raw is not None)
-if not raw:
-    print("❌ GOOGLE_CREDENTIALS not found in environment")
-    exit()
 
-print("Starts with:", repr(raw[:30]))
-print("Ends with:", repr(raw[-30:]))
+if not raw:
+    print("❌ GOOGLE_CREDENTIALS missing")
+    exit()
 
 try:
     creds_dict = json.loads(raw)
 except Exception as e:
-    print("❌ JSON LOAD ERROR:", e)
+    print("❌ Failed to load JSON:", e)
     exit()
 
 gc = gspread.service_account_from_dict(creds_dict)
 
 # =========================
-# OPEN SHEET (FIXED)
+# OPEN SHEET
 # =========================
-SHEET_NAME = "DaySAR"  # <-- CHANGE THIS
+SHEET_FILE = "PARABOLIC SAR"
+WORKSHEET_NAME = "DaySAR"
 
 try:
-    sh = gc.open(SHEET_NAME)
-    sheet = sh.sheet1
-    print("✅ Google Sheet connected")
+    sh = gc.open(SHEET_FILE)
+    sheet = sh.worksheet(WORKSHEET_NAME)
+    print(f"✅ Connected to {SHEET_FILE} → {WORKSHEET_NAME}")
 except Exception as e:
-    print("❌ Could not open sheet:", e)
+    print("❌ Sheet open error:", e)
     exit()
 
 # =========================
-# EXISTING DATA
+# READ EXISTING DATA
 # =========================
 all_data = sheet.get_all_values()
 
@@ -96,26 +95,24 @@ header = [
     "Timeout", "Win%", "Source"
 ]
 
-history = pd.DataFrame(columns=header)
-
 if all_data:
     rows = all_data[1:]
     rows = [r[:10] + [""]*(10-len(r)) for r in rows]
     history = pd.DataFrame(rows, columns=header)
+else:
+    history = pd.DataFrame(columns=header)
 
 # =========================
-# ADD DATA
+# PREPARE NEW ROWS
 # =========================
 now = datetime.now()
 new_rows = []
 
 for _, row in df.iterrows():
-    stock = str(row["Stock"]).strip()
-
     new_rows.append([
         now.strftime("%Y-%m-%d"),
         now.strftime("%H:%M"),
-        stock,
+        str(row["Stock"]).strip(),
         row["Price"],
         int(row["Total Trades"]),
         int(row["Wins"]),
@@ -125,7 +122,7 @@ for _, row in df.iterrows():
         "Python System"
     ])
 
-print("\n📤 Uploading rows:")
+print("\n📤 Rows to upload:")
 for r in new_rows:
     print(r)
 
