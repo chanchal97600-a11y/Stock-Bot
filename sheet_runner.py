@@ -52,19 +52,27 @@ if df.empty:
 # =========================
 # CLEAN & FILTER
 # =========================
-required_cols = ["Stock", "Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
 
-for col in required_cols:
+# 🔴 DO NOT include "Stock" here
+numeric_cols = ["Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
+
+for col in numeric_cols:
     if col not in df.columns:
         df[col] = 0
 
-df[required_cols] = df[required_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
+# Convert only numeric columns
+df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
 
+# Ensure Stock is string (important fix)
+df["Stock"] = df["Stock"].astype(str)
+
+# Filter strong stocks
 df = df[(df["Win%"] >= 50) & (df["Total Trades"] >= 3)]
 
 if df.empty:
     print("⚠️ No strong BUY → using all")
     df = pd.read_csv("buy_candidates.csv")
+    df["Stock"] = df["Stock"].astype(str)
 
 # =========================
 # GOOGLE SHEETS AUTH
@@ -93,7 +101,7 @@ existing_records = sheet.get_all_records()
 today_str = datetime.now().strftime("%Y-%m-%d")
 
 existing_today = {
-    str(r["Stock"]).upper()
+    str(r.get("Stock", "")).upper()
     for r in existing_records
     if str(r.get("Date", "")) == today_str
 }
@@ -104,13 +112,16 @@ existing_today = {
 print("📈 Checking BUY signals...")
 
 for _, row in df.iterrows():
-    stock = str(row["Stock"]).upper()
+    stock = str(row["Stock"]).upper().strip()
     price = float(row["Price"])
+
+    # Skip invalid stock names
+    if stock == "" or stock == "0":
+        continue
 
     if stock not in existing_today:
         send_telegram_message(f"🟢 BUY {stock} @ ₹{price}")
 
-        # ✅ Save to Google Sheet (prevents duplicate alerts)
         try:
             sheet.append_row([
                 stock,
@@ -130,11 +141,11 @@ today = datetime.now()
 
 for rec in existing_records:
     try:
-        stock = rec.get("Stock")
+        stock = str(rec.get("Stock", "")).upper().strip()
         buy_price = float(rec.get("Price", 0))
         buy_date_str = rec.get("Date")
 
-        if not stock or not buy_date_str:
+        if not stock or not buy_date_str or buy_price == 0:
             continue
 
         buy_date = datetime.strptime(buy_date_str, "%Y-%m-%d")
