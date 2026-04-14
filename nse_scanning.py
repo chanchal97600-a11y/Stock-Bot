@@ -121,7 +121,7 @@ def get_data(symbol):
     try:
         ticker = symbol if symbol.endswith(".NS") else symbol + ".NS"
 
-        df = yf.download(ticker, interval="1d", period="max", progress=False)
+        df = yf.download(ticker, interval="1h", period="max", progress=False)
 
         if df is None or df.empty or len(df) < 200:
             return None
