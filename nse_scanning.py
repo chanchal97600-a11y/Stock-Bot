@@ -2,9 +2,10 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
+from ta.trend import PSARIndicator
 
 # =========================
-# NIFTY TREND (DO NOT CHANGE)
+# NIFTY TREND (UNCHANGED)
 # =========================
 def get_nifty_trend():
     try:
@@ -46,11 +47,8 @@ print(f"📊 Loaded {len(stocks)} stocks")
 # =========================
 # INDICATORS
 # =========================
-
-# ✅ FIXED RSI (WILDER / EMA like Pine)
 def rsi(series, length=14):
     delta = series.diff()
-
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
 
@@ -75,45 +73,6 @@ def macd_pine(series, fast=12, slow=26, signal=9):
     return macd_line, signal_line, hist
 
 
-def psar(high, low, close, step=0.02, max_step=0.2):
-    bull = True
-    af = step
-    ep = low.iloc[0]
-    psar_values = []
-
-    for i in range(len(close)):
-        if i == 0:
-            psar_values.append(close.iloc[0])
-            continue
-
-        prev_psar = psar_values[-1]
-
-        if bull:
-            psar_val = prev_psar + af * (ep - prev_psar)
-            if low.iloc[i] < psar_val:
-                bull = False
-                psar_val = ep
-                af = step
-                ep = low.iloc[i]
-        else:
-            psar_val = prev_psar + af * (ep - prev_psar)
-            if high.iloc[i] > psar_val:
-                bull = True
-                psar_val = ep
-                af = step
-                ep = high.iloc[i]
-
-        if bull:
-            ep = max(ep, high.iloc[i])
-        else:
-            ep = min(ep, low.iloc[i])
-
-        af = min(af + step, max_step)
-        psar_values.append(psar_val)
-
-    return pd.Series(psar_values, index=close.index)
-
-
 # =========================
 # FETCH DATA
 # =========================
@@ -121,7 +80,7 @@ def get_data(symbol):
     try:
         ticker = symbol if symbol.endswith(".NS") else symbol + ".NS"
 
-        df = yf.download(ticker, interval="1h", period="max", progress=False)
+        df = yf.download(ticker, interval="1h", period="2y", progress=False)
 
         if df is None or df.empty or len(df) < 200:
             return None
@@ -131,7 +90,7 @@ def get_data(symbol):
 
         df = df.dropna()
 
-        return df, df['Close'], df['High'], df['Low']
+        return df
 
     except:
         return None
@@ -140,55 +99,81 @@ def get_data(symbol):
 # =========================
 # BACKTEST
 # =========================
-def backtest(df, close, high, low):
+def backtest(df):
+
+    close = df['Close']
+    high = df['High']
+    low = df['Low']
+
+    # Indicators
     rsi_val = rsi(close)
     macd, signal, hist = macd_pine(close)
-    sar = psar(high, low, close)
 
-    # ✅ HTF FIXED → DAILY (same as Pine)
-    htf = df.copy()
+    # ✅ PSAR using library (closer to TradingView)
+    psar = PSARIndicator(high, low, close).psar()
+
+    # ✅ TRUE DAILY HTF
+    htf = df.resample('1D').agg({
+        'Open': 'first',
+        'High': 'max',
+        'Low': 'min',
+        'Close': 'last'
+    }).dropna()
+
     macd_htf, signal_htf, _ = macd_pine(htf['Close'])
 
+    # map back to 1H
     macd_htf = macd_htf.reindex(df.index, method='ffill')
     signal_htf = signal_htf.reindex(df.index, method='ffill')
 
     wins = losses = timeout = total = 0
-    i = 100
+    in_trade = False
 
-    while i < len(df) - 100:
+    entry_price = 0
+    entry_index = 0
 
-        if (45 <= rsi_val.iloc[i] <= 65) \
-           and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
-           and (sar.iloc[i] < close.iloc[i]) \
-           and (hist.iloc[i] > 0) \
-           and (macd_htf.iloc[i] > signal_htf.iloc[i] > 0):
+    for i in range(100, len(df)):
 
-            entry = close.iloc[i]
-            target = entry * 1.25
-            stop = entry * 0.85
+        # ================= ENTRY =================
+        if not in_trade:
+            if (45 <= rsi_val.iloc[i] <= 65) \
+               and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
+               and (psar.iloc[i] < close.iloc[i]) \
+               and (hist.iloc[i] > 0) \
+               and (macd_htf.iloc[i] > signal_htf.iloc[i]) \
+               and (macd_htf.iloc[i] > 0):
 
-            j_end = min(i + 100, len(df)-1)
-            closed = False
+                in_trade = True
+                entry_price = close.iloc[i]
+                entry_index = i
+                total += 1
 
-            for j in range(i+1, j_end):
-                if high.iloc[j] >= target:
-                    wins += 1
-                    closed = True
-                    break
-                elif low.iloc[j] <= stop:
-                    losses += 1
-                    closed = True
-                    break
+        # ================= EXIT =================
+        elif in_trade:
+            tp = entry_price * 1.25
+            sl = entry_price * 0.85
 
-            if not closed:
+            # check TP & SL
+            if high.iloc[i] >= tp and low.iloc[i] <= sl:
+                # both hit → assume SL first (conservative)
+                losses += 1
+                in_trade = False
+
+            elif high.iloc[i] >= tp:
+                wins += 1
+                in_trade = False
+
+            elif low.iloc[i] <= sl:
+                losses += 1
+                in_trade = False
+
+            # TIME EXIT (100 bars)
+            elif (i - entry_index) >= 100:
                 timeout += 1
-
-            total += 1
-            i = j_end
-        else:
-            i += 1
+                in_trade = False
 
     win_rate = round((wins / total) * 100, 2) if total > 0 else 0
+
     return total, wins, losses, timeout, win_rate
 
 
@@ -200,45 +185,21 @@ results = []
 for stock in stocks:
     print(f"\n🔍 {stock}")
 
-    data = get_data(stock)
-    if data is None:
+    df = get_data(stock)
+    if df is None:
         continue
 
-    df, close, high, low = data
+    total, wins, losses, timeout, win = backtest(df)
 
-    rsi_val = rsi(close)
-    macd, signal, hist = macd_pine(close)
-    sar = psar(high, low, close)
-
-    # ✅ HTF FIXED → DAILY
-    htf = df.copy()
-    macd_htf, signal_htf, _ = macd_pine(htf['Close'])
-
-    macd_htf = macd_htf.reindex(df.index, method='ffill')
-    signal_htf = signal_htf.reindex(df.index, method='ffill')
-
-    if (45 <= rsi_val.iloc[-1] <= 65) \
-       and (rsi_val.iloc[-2] < rsi_val.iloc[-1]) \
-       and (sar.iloc[-1] < close.iloc[-1]) \
-       and (hist.iloc[-1] > 0) \
-       and (macd_htf.iloc[-1] > signal_htf.iloc[-1] > 0):
-
-        print("✅ SELECTED")
-
-        total, wins, losses, timeout, win = backtest(df, close, high, low)
-
+    if total > 0:
         results.append({
             "Stock": stock,
-            "Price": round(close.iloc[-1], 2),
             "Total Trades": total,
             "Wins": wins,
             "Losses": losses,
             "Timeout": timeout,
             "Win%": win
         })
-
-    else:
-        print("❌ Not matched")
 
     time.sleep(0.2)
 
