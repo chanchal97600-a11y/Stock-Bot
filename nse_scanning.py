@@ -142,7 +142,7 @@ def backtest(df, close, high, low):
     signal_htf = signal_htf.reindex(df.index, method='ffill')
 
     wins = losses = timeout = total = 0
-    i = 200
+    i = 100
 
     while i < len(df) - 100:
 
