@@ -46,11 +46,21 @@ print(f"📊 Loaded {len(stocks)} stocks")
 # =========================
 # INDICATORS
 # =========================
+
+# ✅ FIXED RSI (WILDER / EMA like Pine)
 def rsi(series, length=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(length).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(length).mean()
-    rs = gain / (loss + 1e-9)
+
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
+
+    gain = pd.Series(gain, index=series.index)
+    loss = pd.Series(loss, index=series.index)
+
+    avg_gain = gain.ewm(alpha=1/length, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/length, adjust=False).mean()
+
+    rs = avg_gain / (avg_loss + 1e-9)
     return 100 - (100 / (1 + rs))
 
 
@@ -135,7 +145,8 @@ def backtest(df, close, high, low):
     macd, signal, hist = macd_pine(close)
     sar = psar(high, low, close)
 
-    htf = df.resample('W').last()
+    # ✅ HTF FIXED → DAILY (same as Pine)
+    htf = df.copy()
     macd_htf, signal_htf, _ = macd_pine(htf['Close'])
 
     macd_htf = macd_htf.reindex(df.index, method='ffill')
@@ -199,7 +210,8 @@ for stock in stocks:
     macd, signal, hist = macd_pine(close)
     sar = psar(high, low, close)
 
-    htf = df.resample('W').last()
+    # ✅ HTF FIXED → DAILY
+    htf = df.copy()
     macd_htf, signal_htf, _ = macd_pine(htf['Close'])
 
     macd_htf = macd_htf.reindex(df.index, method='ffill')
