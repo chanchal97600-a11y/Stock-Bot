@@ -52,7 +52,7 @@ if df.empty:
 # =========================
 # CLEAN & FILTER
 # =========================
-required_cols = ["Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
+required_cols = ["Stock", "Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
 
 for col in required_cols:
     if col not in df.columns:
@@ -73,7 +73,7 @@ creds_dict = {
     "type": os.environ.get("type"),
     "project_id": os.environ.get("project_id"),
     "private_key_id": os.environ.get("private_key_id"),
-    "private_key": os.environ.get("private_key").replace("\\n", "\n"),
+    "private_key": os.environ.get("private_key", "").replace("\\n", "\n"),
     "client_email": os.environ.get("client_email"),
     "client_id": os.environ.get("client_id"),
     "auth_uri": os.environ.get("auth_uri"),
@@ -86,25 +86,43 @@ gc = gspread.service_account_from_dict(creds_dict)
 sheet = gc.open("PARABOLIC SAR").worksheet("DaySAR")
 
 # =========================
-# BUY ALERTS (NO SHEET UPDATE)
+# FETCH EXISTING RECORDS
 # =========================
 existing_records = sheet.get_all_records()
+
+today_str = datetime.now().strftime("%Y-%m-%d")
 
 existing_today = {
     str(r["Stock"]).upper()
     for r in existing_records
-    if str(r["Date"]) == datetime.now().strftime("%Y-%m-%d")
+    if str(r.get("Date", "")) == today_str
 }
 
+# =========================
+# BUY ALERTS + SHEET UPDATE
+# =========================
+print("📈 Checking BUY signals...")
+
 for _, row in df.iterrows():
-    stock = row["Stock"].upper()
-    price = row["Price"]
+    stock = str(row["Stock"]).upper()
+    price = float(row["Price"])
 
     if stock not in existing_today:
         send_telegram_message(f"🟢 BUY {stock} @ ₹{price}")
 
+        # ✅ Save to Google Sheet (prevents duplicate alerts)
+        try:
+            sheet.append_row([
+                stock,
+                price,
+                today_str
+            ])
+            print(f"✅ Saved {stock} to sheet")
+        except Exception as e:
+            print("❌ Sheet update error:", e)
+
 # =========================
-# SELL LOGIC (FROM SHEET DATA)
+# SELL LOGIC
 # =========================
 print("🔍 Checking SELL conditions...")
 
@@ -112,15 +130,20 @@ today = datetime.now()
 
 for rec in existing_records:
     try:
-        stock = rec["Stock"]
-        buy_price = float(rec["Price"])
-        buy_date = datetime.strptime(rec["Date"], "%Y-%m-%d")
+        stock = rec.get("Stock")
+        buy_price = float(rec.get("Price", 0))
+        buy_date_str = rec.get("Date")
+
+        if not stock or not buy_date_str:
+            continue
+
+        buy_date = datetime.strptime(buy_date_str, "%Y-%m-%d")
 
         data = yf.Ticker(stock + ".NS").history(period="1d")
         if data.empty:
             continue
 
-        current_price = data["Close"].iloc[-1]
+        current_price = float(data["Close"].iloc[-1])
 
         target = buy_price * 1.25
         stoploss = buy_price * 0.85
@@ -142,6 +165,6 @@ for rec in existing_records:
             )
 
     except Exception as e:
-        print("Error:", e)
+        print("❌ SELL Error:", e)
 
 print("✅ DONE")
