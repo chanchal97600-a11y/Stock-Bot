@@ -10,14 +10,24 @@ from ta.momentum import RSIIndicator
 # =========================
 # GOOGLE SHEET RETRY
 # =========================
-def open_sheet_with_retry(gc, name, retries=5):
-    for i in range(retries):
-        try:
-            return gc.open(name)
-        except Exception as e:
-            print(f"Retry {i+1}: Google Sheet error:", e)
-            time.sleep(5)
-    raise Exception("❌ Failed to connect to Google Sheets")
+import os
+import json
+import gspread
+
+creds_dict = {
+    "type": os.environ["GOOGLE_TYPE"],
+    "project_id": os.environ["GOOGLE_PROJECT_ID"],
+    "private_key_id": os.environ["GOOGLE_PRIVATE_KEY_ID"],
+    "private_key": os.environ["GOOGLE_PRIVATE_KEY"].replace("\\n", "\n"),
+    "client_email": os.environ["GOOGLE_CLIENT_EMAIL"],
+    "client_id": os.environ["GOOGLE_CLIENT_ID"],
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": os.environ["GOOGLE_CLIENT_X509_CERT_URL"]
+}
+
+gc = gspread.service_account_from_dict(creds_dict)
 
 
 # =========================
