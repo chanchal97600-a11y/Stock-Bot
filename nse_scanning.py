@@ -180,7 +180,7 @@ for stock in stocks:
 # SAVE CSV
 # =========================
 if results:
-    pd.DataFrame(results).to_csv("buy_signals.csv", index=False)
+    pd.DataFrame(results).to_csv("buy_candidates.csv", index=False)
     print("\n✅ CSV Saved")
 else:
     print("\n🎯 No signals today")
