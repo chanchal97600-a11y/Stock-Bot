@@ -177,7 +177,7 @@ def backtest(df):
                and (hist.iloc[i] > 0):
 
                 in_trade = True
-                entry_price = df['Open'].iloc[i+1]
+                price = close.iloc[-1]
                 entry_index = i + 1
                 total += 1
 
