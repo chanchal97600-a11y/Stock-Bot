@@ -55,6 +55,35 @@ def get_nifty_trend():
 
 
 # =========================
+# HTF FILTER (WEEKLY MACD)
+# =========================
+def get_htf_trend(symbol):
+    try:
+        ticker = symbol if symbol.endswith(".NS") else symbol + ".NS"
+
+        df = yf.download(ticker, interval="1wk", period="5y", progress=False)
+
+        if df is None or df.empty or len(df) < 50:
+            return False
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        close = df['Close']
+
+        ema_fast = close.ewm(span=12, adjust=False).mean()
+        ema_slow = close.ewm(span=26, adjust=False).mean()
+
+        macd = ema_fast - ema_slow
+        signal = macd.ewm(span=9, adjust=False).mean()
+
+        return macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-1] > 0
+
+    except:
+        return False
+
+
+# =========================
 # LOAD STOCKS
 # =========================
 list_name = get_nifty_trend()
@@ -139,10 +168,8 @@ def backtest(df):
     entry_price = 0
     entry_index = 0
 
-    # 🔥 FIXED LOOP (avoid i+1 error)
     for i in range(100, len(df) - 1):
 
-        # ================= ENTRY =================
         if not in_trade:
             if (45 <= rsi_val.iloc[i] <= 65) \
                and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
@@ -150,14 +177,10 @@ def backtest(df):
                and (hist.iloc[i] > 0):
 
                 in_trade = True
-
-                # 🔥 ENTRY AT NEXT DAY OPEN
                 entry_price = df['Open'].iloc[i+1]
-
                 entry_index = i + 1
                 total += 1
 
-        # ================= EXIT =================
         elif in_trade:
             tp = entry_price * 1.25
             sl = entry_price * 0.85
@@ -174,7 +197,6 @@ def backtest(df):
                 losses += 1
                 in_trade = False
 
-            # ⛔ UNCHANGED (as you requested)
             elif (i - entry_index) >= 100:
                 timeout += 1
                 in_trade = False
@@ -194,6 +216,11 @@ for stock in stocks:
 
     df = get_data(stock)
     if df is None:
+        continue
+
+    # 🔥 HTF FILTER APPLIED HERE
+    if not get_htf_trend(stock):
+        print("❌ HTF not bullish, skipped")
         continue
 
     total, wins, losses, timeout, win = backtest(df)
