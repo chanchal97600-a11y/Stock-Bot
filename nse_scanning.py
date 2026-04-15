@@ -5,16 +5,7 @@ import time
 import gspread
 from datetime import datetime
 from ta.trend import PSARIndicator
-
-# =========================
-# SAFE FLOAT
-# =========================
-def safe_float(value):
-    try:
-        return float(value)
-    except:
-        return None
-
+from ta.momentum import RSIIndicator
 
 # =========================
 # GOOGLE SHEET RETRY
@@ -49,8 +40,7 @@ def get_nifty_trend():
             print("🔴 Using Uptrend")
             return "Uptrend"
 
-    except Exception as e:
-        print("❌ NIFTY Error:", e)
+    except:
         return "DownTrend"
 
 
@@ -99,23 +89,8 @@ print(f"📊 Loaded {len(stocks)} stocks")
 
 
 # =========================
-# INDICATORS
+# MACD FUNCTION
 # =========================
-def rsi(series, length=14):
-    delta = series.diff()
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-
-    gain = pd.Series(gain, index=series.index)
-    loss = pd.Series(loss, index=series.index)
-
-    avg_gain = gain.ewm(alpha=1/length, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/length, adjust=False).mean()
-
-    rs = avg_gain / (avg_loss + 1e-9)
-    return 100 - (100 / (1 + rs))
-
-
 def macd_pine(series, fast=12, slow=26, signal=9):
     ema_fast = series.ewm(span=fast, adjust=False).mean()
     ema_slow = series.ewm(span=slow, adjust=False).mean()
@@ -128,15 +103,15 @@ def macd_pine(series, fast=12, slow=26, signal=9):
 
 
 # =========================
-# FETCH DATA (DAILY)
+# FETCH DATA
 # =========================
 def get_data(symbol):
     try:
         ticker = symbol if symbol.endswith(".NS") else symbol + ".NS"
 
-        df = yf.download(ticker, interval="1d", period="5y", progress=False)
+        df = yf.download(ticker, interval="1d", period="1y", progress=False)
 
-        if df is None or df.empty or len(df) < 200:
+        if df is None or df.empty or len(df) < 100:
             return None
 
         if isinstance(df.columns, pd.MultiIndex):
@@ -150,64 +125,7 @@ def get_data(symbol):
 
 
 # =========================
-# BACKTEST
-# =========================
-def backtest(df):
-
-    close = df['Close']
-    high = df['High']
-    low = df['Low']
-
-    rsi_val = rsi(close)
-    macd, signal, hist = macd_pine(close)
-    psar = PSARIndicator(high, low, close).psar()
-
-    wins = losses = timeout = total = 0
-    in_trade = False
-
-    entry_price = 0
-    entry_index = 0
-
-    for i in range(100, len(df) - 1):
-
-        if not in_trade:
-            if (45 <= rsi_val.iloc[i] <= 65) \
-               and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
-               and (psar.iloc[i] < close.iloc[i]) \
-               and (hist.iloc[i] > 0):
-
-                in_trade = True
-                price = close.iloc[-1]
-                entry_index = i + 1
-                total += 1
-
-        elif in_trade:
-            tp = entry_price * 1.25
-            sl = entry_price * 0.85
-
-            if high.iloc[i] >= tp and low.iloc[i] <= sl:
-                losses += 1
-                in_trade = False
-
-            elif high.iloc[i] >= tp:
-                wins += 1
-                in_trade = False
-
-            elif low.iloc[i] <= sl:
-                losses += 1
-                in_trade = False
-
-            elif (i - entry_index) >= 100:
-                timeout += 1
-                in_trade = False
-
-    win_rate = round((wins / total) * 100, 2) if total > 0 else 0
-
-    return total, wins, losses, timeout, win_rate
-
-
-# =========================
-# SCANNER
+# SCANNER (LIVE SIGNAL)
 # =========================
 results = []
 
@@ -218,21 +136,41 @@ for stock in stocks:
     if df is None:
         continue
 
-    # 🔥 HTF FILTER APPLIED HERE
+    # HTF FILTER
     if not get_htf_trend(stock):
-        print("❌ HTF not bullish, skipped")
+        print("❌ HTF not bullish")
         continue
 
-    total, wins, losses, timeout, win = backtest(df)
+    close = df['Close']
+    high = df['High']
+    low = df['Low']
 
-    if total > 0:
+    # INDICATORS
+    rsi_val = RSIIndicator(close).rsi()
+    macd, signal, hist = macd_pine(close)
+
+    psar = PSARIndicator(
+        high, low, close,
+        step=0.02,
+        max_step=0.2
+    ).psar()
+
+    last = len(df) - 1
+
+    # ================= BUY CONDITION =================
+    if (45 <= rsi_val.iloc[last] <= 65) \
+       and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
+       and (psar.iloc[last] < close.iloc[last]) \
+       and (hist.iloc[last] > 0):
+
+        price = close.iloc[last]
+
+        print(f"🔥 BUY SIGNAL: {stock} @ {price}")
+
         results.append({
             "Stock": stock,
-            "Total Trades": total,
-            "Wins": wins,
-            "Losses": losses,
-            "Timeout": timeout,
-            "Win%": win
+            "Price": round(price, 2),
+            "Date": datetime.now().strftime("%Y-%m-%d")
         })
 
     time.sleep(0.2)
@@ -242,10 +180,10 @@ for stock in stocks:
 # SAVE CSV
 # =========================
 if results:
-    pd.DataFrame(results).to_csv("buy_candidates.csv", index=False)
+    pd.DataFrame(results).to_csv("buy_signals.csv", index=False)
     print("\n✅ CSV Saved")
 else:
-    print("\n🎯 No stocks found")
+    print("\n🎯 No signals today")
 
 
 # =========================
@@ -260,12 +198,8 @@ try:
     for row in results:
         sheet.append_row([
             row["Stock"],
-            row["Total Trades"],
-            row["Wins"],
-            row["Losses"],
-            row["Timeout"],
-            row["Win%"],
-            datetime.now().strftime("%Y-%m-%d")
+            row["Price"],
+            row["Date"]
         ])
 
     print("✅ Data pushed to Google Sheet")
