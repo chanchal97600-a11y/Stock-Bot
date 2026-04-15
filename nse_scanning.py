@@ -2,7 +2,33 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
+import gspread
+import os
+from datetime import datetime
 from ta.trend import PSARIndicator
+
+# =========================
+# SAFE FLOAT
+# =========================
+def safe_float(value):
+    try:
+        return float(value)
+    except:
+        return None
+
+
+# =========================
+# GOOGLE SHEET RETRY
+# =========================
+def open_sheet_with_retry(gc, name, retries=5):
+    for i in range(retries):
+        try:
+            return gc.open(name)
+        except Exception as e:
+            print(f"Retry {i+1}: Google Sheet error:", e)
+            time.sleep(5)
+    raise Exception("❌ Failed to connect to Google Sheets")
+
 
 # =========================
 # NIFTY TREND (UNCHANGED)
@@ -45,7 +71,7 @@ print(f"📊 Loaded {len(stocks)} stocks")
 
 
 # =========================
-# INDICATORS
+# INDICATORS (UNCHANGED)
 # =========================
 def rsi(series, length=14):
     delta = series.diff()
@@ -89,7 +115,6 @@ def get_data(symbol):
             df.columns = df.columns.get_level_values(0)
 
         df = df.dropna()
-
         return df
 
     except:
@@ -97,7 +122,7 @@ def get_data(symbol):
 
 
 # =========================
-# BACKTEST
+# BACKTEST (UNCHANGED)
 # =========================
 def backtest(df):
 
@@ -105,14 +130,11 @@ def backtest(df):
     high = df['High']
     low = df['Low']
 
-    # Indicators
     rsi_val = rsi(close)
     macd, signal, hist = macd_pine(close)
 
-    # ✅ PSAR using library (closer to TradingView)
     psar = PSARIndicator(high, low, close).psar()
 
-    # ✅ TRUE DAILY HTF
     htf = df.resample('1D').agg({
         'Open': 'first',
         'High': 'max',
@@ -122,7 +144,6 @@ def backtest(df):
 
     macd_htf, signal_htf, _ = macd_pine(htf['Close'])
 
-    # map back to 1H
     macd_htf = macd_htf.reindex(df.index, method='ffill')
     signal_htf = signal_htf.reindex(df.index, method='ffill')
 
@@ -134,7 +155,7 @@ def backtest(df):
 
     for i in range(100, len(df)):
 
-        # ================= ENTRY =================
+        # ENTRY
         if not in_trade:
             if (45 <= rsi_val.iloc[i] <= 65) \
                and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
@@ -148,14 +169,12 @@ def backtest(df):
                 entry_index = i
                 total += 1
 
-        # ================= EXIT =================
+        # EXIT
         elif in_trade:
             tp = entry_price * 1.25
             sl = entry_price * 0.85
 
-            # check TP & SL
             if high.iloc[i] >= tp and low.iloc[i] <= sl:
-                # both hit → assume SL first (conservative)
                 losses += 1
                 in_trade = False
 
@@ -167,7 +186,6 @@ def backtest(df):
                 losses += 1
                 in_trade = False
 
-            # TIME EXIT (100 bars)
             elif (i - entry_index) >= 100:
                 timeout += 1
                 in_trade = False
@@ -212,3 +230,29 @@ if results:
     print("\n✅ CSV Saved")
 else:
     print("\n🎯 No stocks found")
+
+
+# =========================
+# GOOGLE SHEET UPDATE (SAFE)
+# =========================
+try:
+    gc = gspread.service_account(filename="credentials.json")
+
+    sheet_obj = open_sheet_with_retry(gc, "PARABOLIC SAR")
+    sheet = sheet_obj.worksheet("DaySAR")
+
+    for row in results:
+        sheet.append_row([
+            row["Stock"],
+            row["Total Trades"],
+            row["Wins"],
+            row["Losses"],
+            row["Timeout"],
+            row["Win%"],
+            datetime.now().strftime("%Y-%m-%d")
+        ])
+
+    print("✅ Data pushed to Google Sheet")
+
+except Exception as e:
+    print("❌ Sheet Error:", e)
