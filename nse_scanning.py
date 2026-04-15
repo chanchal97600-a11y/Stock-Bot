@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import time
 import gspread
-import os
 from datetime import datetime
 from ta.trend import PSARIndicator
 
@@ -31,7 +30,7 @@ def open_sheet_with_retry(gc, name, retries=5):
 
 
 # =========================
-# NIFTY TREND (UNCHANGED)
+# NIFTY TREND
 # =========================
 def get_nifty_trend():
     try:
@@ -71,7 +70,7 @@ print(f"📊 Loaded {len(stocks)} stocks")
 
 
 # =========================
-# INDICATORS (UNCHANGED)
+# INDICATORS
 # =========================
 def rsi(series, length=14):
     delta = series.diff()
@@ -100,13 +99,13 @@ def macd_pine(series, fast=12, slow=26, signal=9):
 
 
 # =========================
-# FETCH DATA
+# FETCH DATA (DAILY)
 # =========================
 def get_data(symbol):
     try:
         ticker = symbol if symbol.endswith(".NS") else symbol + ".NS"
 
-        df = yf.download(ticker, interval="1D", period="max", progress=False)
+        df = yf.download(ticker, interval="1d", period="5y", progress=False)
 
         if df is None or df.empty or len(df) < 200:
             return None
@@ -122,7 +121,7 @@ def get_data(symbol):
 
 
 # =========================
-# BACKTEST (UNCHANGED)
+# BACKTEST
 # =========================
 def backtest(df):
 
@@ -132,20 +131,7 @@ def backtest(df):
 
     rsi_val = rsi(close)
     macd, signal, hist = macd_pine(close)
-
     psar = PSARIndicator(high, low, close).psar()
-
-    htf = df.resample('1D').agg({
-        'Open': 'first',
-        'High': 'max',
-        'Low': 'min',
-        'Close': 'last'
-    }).dropna()
-
-    macd_htf, signal_htf, _ = macd_pine(htf['Close'])
-
-    macd_htf = macd_htf.reindex(df.index, method='ffill')
-    signal_htf = signal_htf.reindex(df.index, method='ffill')
 
     wins = losses = timeout = total = 0
     in_trade = False
@@ -153,23 +139,25 @@ def backtest(df):
     entry_price = 0
     entry_index = 0
 
-    for i in range(100, len(df)):
+    # 🔥 FIXED LOOP (avoid i+1 error)
+    for i in range(100, len(df) - 1):
 
-        # ENTRY
+        # ================= ENTRY =================
         if not in_trade:
             if (45 <= rsi_val.iloc[i] <= 65) \
                and (rsi_val.iloc[i-1] < rsi_val.iloc[i]) \
                and (psar.iloc[i] < close.iloc[i]) \
-               and (hist.iloc[i] > 0) \
-               and (macd_htf.iloc[i] > signal_htf.iloc[i]) \
-               and (macd_htf.iloc[i] > 0):
+               and (hist.iloc[i] > 0):
 
                 in_trade = True
-                entry_price = close.iloc[i]
-                entry_index = i
+
+                # 🔥 ENTRY AT NEXT DAY OPEN
+                entry_price = df['Open'].iloc[i+1]
+
+                entry_index = i + 1
                 total += 1
 
-        # EXIT
+        # ================= EXIT =================
         elif in_trade:
             tp = entry_price * 1.25
             sl = entry_price * 0.85
@@ -186,6 +174,7 @@ def backtest(df):
                 losses += 1
                 in_trade = False
 
+            # ⛔ UNCHANGED (as you requested)
             elif (i - entry_index) >= 100:
                 timeout += 1
                 in_trade = False
@@ -233,7 +222,7 @@ else:
 
 
 # =========================
-# GOOGLE SHEET UPDATE (SAFE)
+# GOOGLE SHEET UPDATE
 # =========================
 try:
     gc = gspread.service_account(filename="credentials.json")
