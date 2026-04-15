@@ -15,20 +15,20 @@ import json
 import gspread
 
 creds_dict = {
-    "type": os.environ["GOOGLE_TYPE"],
-    "project_id": os.environ["GOOGLE_PROJECT_ID"],
-    "private_key_id": os.environ["GOOGLE_PRIVATE_KEY_ID"],
-    "private_key": os.environ["GOOGLE_PRIVATE_KEY"].replace("\\n", "\n"),
-    "client_email": os.environ["GOOGLE_CLIENT_EMAIL"],
-    "client_id": os.environ["GOOGLE_CLIENT_ID"],
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
+    "type": os.environ["type"],
+    "project_id": os.environ["project_id"],
+    "private_key_id": os.environ["private_key_id"],
+    "private_key": os.environ["private_key"].replace("\\n", "\n"),
+    "client_email": os.environ["client_email"],
+    "client_id": os.environ["client_id"],
+    "auth_uri": os.environ["auth_uri"],
+    "token_uri": os.environ["token_uri"],
     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": os.environ["GOOGLE_CLIENT_X509_CERT_URL"]
+    "client_x509_cert_url": os.environ["client_x509_cert_url"],
+    "universe_domain": os.environ.get("universe_domain", "googleapis.com")
 }
 
 gc = gspread.service_account_from_dict(creds_dict)
-
 
 # =========================
 # NIFTY TREND
