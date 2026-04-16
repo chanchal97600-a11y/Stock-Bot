@@ -197,22 +197,41 @@ else:
 
 
 # =========================
-# GOOGLE SHEET UPDATE
+# GOOGLE SHEET UPDATE 
 # =========================
 try:
-    gc = gspread.service_account(filename="credentials.json")
+    # Use creds_dict (NO credentials.json)
+    gc = gspread.service_account_from_dict(creds_dict)
 
     sheet_obj = open_sheet_with_retry(gc, "PARABOLIC SAR")
     sheet = sheet_obj.worksheet("DaySAR")
 
-    for row in results:
-        sheet.append_row([
-            row["Stock"],
-            row["Price"],
-            row["Date"]
-        ])
+    # Get existing data
+    existing_data = sheet.get_all_values()
 
-    print("✅ Data pushed to Google Sheet")
+    # Create set of (Stock, Date)
+    existing_set = set()
+    for row in existing_data[1:]:  # skip header
+        if len(row) >= 3:
+            existing_set.add((row[0], row[2]))
+
+    # Filter new rows
+    new_rows = []
+    for row in results:
+        key = (row["Stock"], row["Date"])
+        if key not in existing_set:
+            new_rows.append([
+                row["Stock"],
+                row["Price"],
+                row["Date"]
+            ])
+
+    # Push only new data
+    if new_rows:
+        sheet.append_rows(new_rows)
+        print(f"✅ {len(new_rows)} new rows added")
+    else:
+        print("ℹ️ No new rows (duplicates skipped)")
 
 except Exception as e:
     print("❌ Sheet Error:", e)
