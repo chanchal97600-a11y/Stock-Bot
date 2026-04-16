@@ -206,25 +206,31 @@ try:
     sheet_obj = open_sheet_with_retry(gc, "PARABOLIC SAR")
     sheet = sheet_obj.worksheet("DaySAR")
 
-    # Get existing data
-    existing_data = sheet.get_all_values()
+   # Get existing data
+existing_data = sheet.get_all_values()
 
-    # Create set of (Stock, Date)
-    existing_set = set()
-    for row in existing_data[1:]:  # skip header
-        if len(row) >= 3:
-            existing_set.add((row[0], row[2]))
+# Normalize existing data
+existing_set = set()
+for row in existing_data[1:]:
+    if len(row) >= 3:
+        stock = row[0].strip().upper()
+        date = str(row[2]).strip()
+        existing_set.add((stock, date))
 
-    # Filter new rows
-    new_rows = []
-    for row in results:
-        key = (row["Stock"], row["Date"])
-        if key not in existing_set:
-            new_rows.append([
-                row["Stock"],
-                row["Price"],
-                row["Date"]
-            ])
+# Filter new rows
+new_rows = []
+for row in results:
+    stock = row["Stock"].strip().upper()
+    date = str(row["Date"]).strip()
+
+    key = (stock, date)
+
+    if key not in existing_set:
+        new_rows.append([
+            stock,
+            row["Price"],
+            date
+        ])
 
     # Push only new data
     if new_rows:
