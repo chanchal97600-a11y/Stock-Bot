@@ -120,7 +120,7 @@ for _, row in df.iterrows():
         continue
 
     if stock not in existing_today:
-        send_telegram_message(f"🟢 BUY {stock} @ ₹{price}")
+        send_telegram_message(f"🟢 Current Price {stock} @ ₹{price}")
 
         try:
             sheet.append_row([
