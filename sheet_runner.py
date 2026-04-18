@@ -170,9 +170,9 @@ for rec in existing_records:
                 f"🔻 SELL {stock} @ ₹{current_price:.2f}\n🛑 STOP LOSS"
             )
 
-        elif days >= 200:
+        elif days >= 100:
             send_telegram_message(
-                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n⏳ TIME EXIT (200 Days)"
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n⏳ TIME EXIT (100 Days)"
             )
 
     except Exception as e:
