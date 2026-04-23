@@ -89,7 +89,7 @@ def nifty_trend_at_date(date, nifty_df):
 # DATA
 # =========================
 def get_data(symbol):
-    df = yf.download(symbol + ".NS", period="10y", interval="1d", progress=False)
+    df = yf.download(symbol + ".NS", period="2y", interval="1d", progress=False)
     if df.empty:
         return None
     return df
