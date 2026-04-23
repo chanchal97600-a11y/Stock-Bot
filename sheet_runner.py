@@ -179,26 +179,13 @@ for rec in existing_records:
         print("❌ SELL Error:", e)
 
 print("✅ DONE")
+
+
 # =========================
-# RUN StockSignals.py
+# RUN StockSignals 
 # =========================
-
-import sys
-
-print("🚀 Running StockSignals.py...")
-
 try:
-    result = subprocess.run(
-        [sys.executable, "StockSignals.py"],
-        capture_output=True,
-        text=True
-    )
-    
-    print("STDOUT:", result.stdout)
-    print("STDERR:", result.stderr)
-
-    if result.returncode != 0:
-        print("❌ Script failed")
-
+    import StockSignals
+    StockSignals.run()
 except Exception as e:
     print("❌ Error running StockSignals:", e)
