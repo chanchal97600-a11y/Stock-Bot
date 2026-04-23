@@ -182,10 +182,23 @@ print("✅ DONE")
 # =========================
 # RUN StockSignals.py
 # =========================
+
+import sys
+
 print("🚀 Running StockSignals.py...")
 
 try:
-    subprocess.run(["python", "StockSignals.py"], check=True)
-    print("✅ StockSignals completed")
+    result = subprocess.run(
+        [sys.executable, "StockSignals.py"],
+        capture_output=True,
+        text=True
+    )
+    
+    print("STDOUT:", result.stdout)
+    print("STDERR:", result.stderr)
+
+    if result.returncode != 0:
+        print("❌ Script failed")
+
 except Exception as e:
     print("❌ Error running StockSignals:", e)
