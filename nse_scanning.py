@@ -167,21 +167,35 @@ for stock in stocks:
 
     last = len(df) - 1
 
-    # ================= BUY CONDITION =================
-    if (45 <= rsi_val.iloc[last] <= 65) \
-       and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
-       and (psar.iloc[last] < close.iloc[last]) \
-       and (hist.iloc[last] > 0):
+   # ================= BUY CONDITION =================
 
-        price = close.iloc[last]
+# ---- PSAR EARLY TREND LOGIC ----
+bullish = psar.iloc[last] < close.iloc[last]
 
-        print(f"🔥 BUY SIGNAL: {stock} @ {price}")
+bull_count = 0
+for i in range(last, -1, -1):
+    if psar.iloc[i] < close.iloc[i]:
+        bull_count += 1
+    else:
+        break
 
-        results.append({
-            "Stock": stock,
-            "Price": round(price, 2),
-            "Date": datetime.now().strftime("%Y-%m-%d")
-        })
+
+# ---- MAIN SIGNAL CONDITION ----
+if (45 <= rsi_val.iloc[last] <= 65) \
+   and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
+   and bullish \
+   and (bull_count <= 10) \
+   and (hist.iloc[last] > 0):
+
+    price = close.iloc[last]
+
+    print(f"🔥 BUY SIGNAL: {stock} @ {price}")
+
+    results.append({
+        "Stock": stock,
+        "Price": round(price, 2),
+        "Date": datetime.now().strftime("%Y-%m-%d")
+    })
 
     time.sleep(0.2)
 
