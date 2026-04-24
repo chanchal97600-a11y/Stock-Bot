@@ -7,6 +7,9 @@ app = Flask(__name__)
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
+# 👉 CHANGE THIS if you want channel output
+CHANNEL_ID = "@YourChannelName"   # OR "-100xxxxxxxxxx"
+
 
 def send_msg(chat_id, text):
     try:
@@ -17,7 +20,7 @@ def send_msg(chat_id, text):
         print("SEND STATUS:", res.status_code)
         print("SEND RESPONSE:", res.text)
     except Exception as e:
-        print("Send message error:", e)
+        print("Send error:", e)
 
 
 @app.route("/", methods=["POST"])
@@ -25,46 +28,52 @@ def webhook():
     print("WEBHOOK HIT")
 
     data = request.get_json(silent=True)
-    print("FULL DATA:", data)
+    print("DATA:", data)
 
     if not data or "message" not in data:
         return "ok"
 
-    chat = data["message"].get("chat", {})
-    chat_id = chat.get("id")
-
+    chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text", "")
-    print("TEXT RECEIVED:", text)
 
-    if not chat_id:
-        return "ok"
+    print("TEXT:", text)
 
-    # =========================
-    # COMMAND HANDLER
-    # =========================
+    # ======================
+    # RUN COMMAND
+    # ======================
     if text and text.strip().startswith("/run"):
+
         send_msg(chat_id, "⏳ Running scanner...")
 
         try:
             result = subprocess.run(
-                ["python3", "sheet_runner.py"],
+                ["python3", "-u", "sheet_runner.py"],  # 🔥 IMPORTANT FIX
                 capture_output=True,
                 text=True,
                 timeout=300
             )
 
-            output = result.stdout if result.stdout else result.stderr
-            output = output[-3500:] if output else "Done"
+            print("STDOUT:", result.stdout)
+            print("STDERR:", result.stderr)
+            print("CODE:", result.returncode)
+
+            output = result.stdout or result.stderr
+            output = output.strip()
+
+            if not output:
+                output = "❌ No output from scanner"
+
+            output = output[-3500:]
 
             send_msg(chat_id, "✅ Completed\n\n" + output)
 
         except subprocess.TimeoutExpired:
-            send_msg(chat_id, "❌ Timeout: Script took too long")
+            send_msg(chat_id, "❌ Timeout: script took too long")
 
         except Exception as e:
             send_msg(chat_id, f"❌ Error: {str(e)}")
 
-    elif text:
+    else:
         send_msg(chat_id, f"Use /run (you sent: {text})")
 
     return "ok"
