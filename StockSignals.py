@@ -148,17 +148,17 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
                 bull_count <= 15 and
                 data["hist"].iloc[i] > 0
             ):   
-            entry_price = data["Open"].iloc[i + 1]
-            entry_date = data.index[i + 1]
+                entry_price = data["Open"].iloc[i + 1]
+                entry_date = data.index[i + 1]
 
-            market_trend = nifty_trend_at_date(entry_date, nifty_df)
+                market_trend = nifty_trend_at_date(entry_date, nifty_df)
 
-            tp = entry_price * 1.25
-            sl = entry_price * 0.85
+                tp = entry_price * 1.25
+                sl = entry_price * 0.85
 
-            result = "OPEN"
-            exit_price = None
-            exit_date = None
+                result = "OPEN"
+                exit_price = None
+                exit_date = None
 
             max_days = 100
             end = min(i + 1 + max_days, len(data))
