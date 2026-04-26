@@ -128,14 +128,26 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
         if not get_htf_trend_at_date(htf_df, date):
             continue
 
-        # ✅ ENTRY CONDITIONS
-        if (
-            45 <= data["rsi"].iloc[i] <= 65 and
-            data["rsi"].iloc[i] > data["rsi"].iloc[i - 1] and
-            data["hist"].iloc[i] > 0 and
-            data["psar"].iloc[i] < data["Close"].iloc[i]
-        ):
+        # =========================
+        # NEW PSAR EARLY TREND LOGIC
+        # =========================
+        bullish = data["psar"].iloc[i] < data["Close"].iloc[i]
 
+        bull_count = 0
+        for k in range(i, -1, -1):
+            if data["psar"].iloc[k] < data["Close"].iloc[k]:
+                bull_count += 1
+            else:
+                break
+
+        # ENTRY CONDITIONS
+            if (
+                45 <= data["rsi"].iloc[i] <= 65 and
+                data["rsi"].iloc[i] > data["rsi"].iloc[i - 1] and
+                bullish and
+                bull_count <= 15 and
+                data["hist"].iloc[i] > 0
+            ):   
             entry_price = data["Open"].iloc[i + 1]
             entry_date = data.index[i + 1]
 
