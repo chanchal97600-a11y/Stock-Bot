@@ -7,9 +7,6 @@ from datetime import datetime
 from ta.trend import PSARIndicator
 from ta.momentum import RSIIndicator
 
-# =========================
-# GOOGLE SHEET RETRY
-# =========================
 import os
 import json
 import gspread
@@ -32,8 +29,6 @@ gc = gspread.service_account_from_dict(creds_dict)
 sheet = gc.open("PARABOLIC SAR").worksheet("StockSignals")
 
 # =========================
-# MACD (FIXED)
-# =========================
 def macd_hist(series):
     ema_fast = series.ewm(span=12, adjust=False).mean()
     ema_slow = series.ewm(span=26, adjust=False).mean()
@@ -42,26 +37,19 @@ def macd_hist(series):
     return macd_line - signal
 
 # =========================
-# CLEAN SERIES
-# =========================
 def clean(x):
     if isinstance(x, pd.DataFrame):
         x = x.iloc[:, 0]
     return pd.Series(x.values, index=x.index)
 
 # =========================
-# HTF TREND (FIXED ALIGNMENT)
-# =========================
 def get_htf_trend_at_date(htf_df, date):
-
-    # ✅ FIX: no future data
     df = htf_df[htf_df.index <= date]
 
     if len(df) < 30:
         return False
 
     close = clean(df["Close"])
-
     ema_fast = close.ewm(span=12, adjust=False).mean()
     ema_slow = close.ewm(span=26, adjust=False).mean()
 
@@ -71,8 +59,6 @@ def get_htf_trend_at_date(htf_df, date):
 
     return hist.iloc[-1] > 0
 
-# =========================
-# NIFTY TREND
 # =========================
 def nifty_trend_at_date(date, nifty_df):
     df = nifty_df[nifty_df.index <= date].copy()
@@ -86,16 +72,12 @@ def nifty_trend_at_date(date, nifty_df):
     return "BULLISH" if close.iloc[-1] > sma_100.iloc[-1] else "BEARISH"
 
 # =========================
-# DATA
-# =========================
 def get_data(symbol):
     df = yf.download(symbol + ".NS", period="2y", interval="1d", progress=False)
     if df.empty:
         return None
     return df
 
-# =========================
-# CORE LOGIC
 # =========================
 def get_last_trade(df, htf_df, symbol, nifty_df):
 
@@ -124,13 +106,9 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
 
         date = data.index[i]
 
-        # ✅ HTF FILTER
         if not get_htf_trend_at_date(htf_df, date):
             continue
 
-        # =========================
-        # NEW PSAR EARLY TREND LOGIC
-        # =========================
         bullish = data["psar"].iloc[i] < data["Close"].iloc[i]
 
         bull_count = 0
@@ -140,29 +118,34 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
             else:
                 break
 
-        # ENTRY CONDITIONS
-            if (
-                45 <= data["rsi"].iloc[i] <= 65 and
-                data["rsi"].iloc[i] > data["rsi"].iloc[i - 1] and
-                bullish and
-                bull_count <= 15 and
-                data["hist"].iloc[i] > 0
-            ):   
-                entry_price = data["Open"].iloc[i + 1]
-                entry_date = data.index[i + 1]
+        # =========================
+        # ENTRY CONDITIONS (FIXED INDENTATION)
+        # =========================
+        if (
+            45 <= data["rsi"].iloc[i] <= 65 and
+            data["rsi"].iloc[i] > data["rsi"].iloc[i - 1] and
+            bullish and
+            bull_count <= 15 and
+            data["hist"].iloc[i] > 0
+        ):
 
-                market_trend = nifty_trend_at_date(entry_date, nifty_df)
+            entry_price = data["Open"].iloc[i + 1]
+            entry_date = data.index[i + 1]
+            market_trend = nifty_trend_at_date(entry_date, nifty_df)
 
-                tp = entry_price * 1.25
-                sl = entry_price * 0.85
+            tp = entry_price * 1.25
+            sl = entry_price * 0.85
 
-                result = "OPEN"
-                exit_price = None
-                exit_date = None
+            result = "OPEN"
+            exit_price = None
+            exit_date = None
 
             max_days = 100
             end = min(i + 1 + max_days, len(data))
 
+            # =========================
+            # EXIT LOOP (FIXED INDENTATION)
+            # =========================
             for j in range(i + 1, end):
 
                 if data["High"].iloc[j] >= tp:
@@ -193,8 +176,6 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
 
     return last_trade
 
-# =========================
-# MAIN
 # =========================
 file = "stocks.txt"
 stocks = [s.strip().upper() for s in open(file) if s.strip()]
@@ -233,9 +214,6 @@ for stock in stocks:
     else:
         print(f"NO TRADE: {stock}")
 
-# =========================
-# GOOGLE SHEET FULL UPDATE (FIXED)
-# =========================
 headers = ["Stock","Buy Date","Buy Price","Status","Sell Date","Sell Price","Market Trend"]
 
 print("Updating sheet...")
