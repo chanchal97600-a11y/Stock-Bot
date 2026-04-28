@@ -6,14 +6,12 @@ import gspread
 from datetime import datetime
 from ta.trend import PSARIndicator
 from ta.momentum import RSIIndicator
-
-# =========================
-# GOOGLE SHEET RETRY
-# =========================
 import os
 import json
-import gspread
 
+# =========================
+# GOOGLE SHEET LOGIN
+# =========================
 creds_dict = {
     "type": os.environ["type"],
     "project_id": os.environ["project_id"],
@@ -29,6 +27,18 @@ creds_dict = {
 }
 
 gc = gspread.service_account_from_dict(creds_dict)
+
+# =========================
+# GOOGLE SHEET RETRY
+# =========================
+def open_sheet_with_retry(gc, sheet_name, retries=5):
+    for i in range(retries):
+        try:
+            return gc.open(sheet_name)
+        except Exception as e:
+            print(f"Retry {i+1}: {e}")
+            time.sleep(2)
+    raise Exception("Unable to open sheet")
 
 # =========================
 # NIFTY TREND
@@ -50,9 +60,9 @@ def get_nifty_trend():
             print("🔴 Using Uptrend")
             return "Uptrend"
 
-    except:
+    except Exception as e:
+        print("Nifty Error:", e)
         return "DownTrend"
-
 
 # =========================
 # HTF FILTER (WEEKLY MACD)
@@ -79,9 +89,9 @@ def get_htf_trend(symbol):
 
         return macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-1] > 0
 
-    except:
+    except Exception as e:
+        print(symbol, "HTF Error:", e)
         return False
-
 
 # =========================
 # LOAD STOCKS
@@ -97,7 +107,6 @@ except:
 
 print(f"📊 Loaded {len(stocks)} stocks")
 
-
 # =========================
 # MACD FUNCTION
 # =========================
@@ -110,7 +119,6 @@ def macd_pine(series, fast=12, slow=26, signal=9):
     hist = macd_line - signal_line
 
     return macd_line, signal_line, hist
-
 
 # =========================
 # FETCH DATA
@@ -130,9 +138,9 @@ def get_data(symbol):
         df = df.dropna()
         return df
 
-    except:
+    except Exception as e:
+        print(symbol, "Data Error:", e)
         return None
-
 
 # =========================
 # SCANNER (LIVE SIGNAL)
@@ -143,12 +151,14 @@ for stock in stocks:
     print(f"\n🔍 {stock}")
 
     df = get_data(stock)
+
     if df is None:
         continue
 
     # HTF FILTER
     if not get_htf_trend(stock):
         print("❌ HTF not bullish")
+        time.sleep(0.2)
         continue
 
     close = df['Close']
@@ -167,38 +177,36 @@ for stock in stocks:
 
     last = len(df) - 1
 
-   # ================= BUY CONDITION =================
+    # ================= BUY CONDITION =================
 
-# ---- PSAR EARLY TREND LOGIC ----
-bullish = psar.iloc[last] < close.iloc[last]
+    # ---- PSAR EARLY TREND LOGIC ----
+    bullish = psar.iloc[last] < close.iloc[last]
 
-bull_count = 0
-for i in range(last, -1, -1):
-    if psar.iloc[i] < close.iloc[i]:
-        bull_count += 1
-    else:
-        break
+    bull_count = 0
+    for i in range(last, -1, -1):
+        if psar.iloc[i] < close.iloc[i]:
+            bull_count += 1
+        else:
+            break
 
+    # ---- MAIN SIGNAL CONDITION ----
+    if (45 <= rsi_val.iloc[last] <= 65) \
+       and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
+       and bullish \
+       and (bull_count <= 15) \
+       and (hist.iloc[last] > 0):
 
-# ---- MAIN SIGNAL CONDITION ----
-if (45 <= rsi_val.iloc[last] <= 65) \
-   and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
-   and bullish \
-   and (bull_count <= 15) \
-   and (hist.iloc[last] > 0):
+        price = close.iloc[last]
 
-    price = close.iloc[last]
+        print(f"🔥 BUY SIGNAL: {stock} @ {price}")
 
-    print(f"🔥 BUY SIGNAL: {stock} @ {price}")
-
-    results.append({
-        "Stock": stock,
-        "Price": round(price, 2),
-        "Date": datetime.now().strftime("%Y-%m-%d")
-    })
+        results.append({
+            "Stock": stock,
+            "Price": round(price, 2),
+            "Date": datetime.now().strftime("%Y-%m-%d")
+        })
 
     time.sleep(0.2)
-
 
 # =========================
 # SAVE CSV
@@ -209,13 +217,10 @@ if results:
 else:
     print("\n🎯 No signals today")
 
-
 # =========================
 # GOOGLE SHEET UPDATE
 # =========================
 try:
-    gc = gspread.service_account(filename="credentials.json")
-
     sheet_obj = open_sheet_with_retry(gc, "PARABOLIC SAR")
     sheet = sheet_obj.worksheet("DaySAR")
 
