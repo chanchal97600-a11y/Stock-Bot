@@ -193,7 +193,7 @@ for stock in stocks:
     if (45 <= rsi_val.iloc[last] <= 65) \
        and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
        and bullish \
-       and (bull_count <= 15) \
+       and (bull_count <= 25) \
        and (hist.iloc[last] > 0):
 
         price = close.iloc[last]
