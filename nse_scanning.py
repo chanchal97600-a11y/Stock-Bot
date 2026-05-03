@@ -87,7 +87,7 @@ def get_htf_trend(symbol):
         macd = ema_fast - ema_slow
         signal = macd.ewm(span=9, adjust=False).mean()
 
-        return macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-1] > 0
+        return macd.iloc[-2] > signal.iloc[-2] and macd.iloc[-2] > 0
 
     except Exception as e:
         print(symbol, "HTF Error:", e)
