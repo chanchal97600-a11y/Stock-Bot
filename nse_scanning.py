@@ -194,7 +194,9 @@ for stock in stocks:
        and (rsi_val.iloc[last-1] < rsi_val.iloc[last]) \
        and bullish \
        and (bull_count <= 25) \
-       and (hist.iloc[last] > 0):
+       and (hist.iloc[last] > 0) \
+       and (macd.iloc[last] > 0) \
+       and (signal.iloc[last] > 0)
 
         price = close.iloc[last]
 
