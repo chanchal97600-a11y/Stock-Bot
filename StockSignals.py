@@ -29,12 +29,13 @@ gc = gspread.service_account_from_dict(creds_dict)
 sheet = gc.open("PARABOLIC SAR").worksheet("StockSignals")
 
 # =========================
-def macd_hist(series):
+def macd_full(series):
     ema_fast = series.ewm(span=12, adjust=False).mean()
     ema_slow = series.ewm(span=26, adjust=False).mean()
     macd_line = ema_fast - ema_slow
     signal = macd_line.ewm(span=9, adjust=False).mean()
-    return macd_line - signal
+    hist = macd_line - signal
+    return macd_line, signal, hist
 
 # =========================
 def clean(x):
@@ -43,6 +44,7 @@ def clean(x):
     return pd.Series(x.values, index=x.index)
 
 # =========================
+# ✅ UPDATED HTF (same as Pine)
 def get_htf_trend_at_date(htf_df, date):
     df = htf_df[htf_df.index <= date]
 
@@ -50,14 +52,9 @@ def get_htf_trend_at_date(htf_df, date):
         return False
 
     close = clean(df["Close"])
-    ema_fast = close.ewm(span=12, adjust=False).mean()
-    ema_slow = close.ewm(span=26, adjust=False).mean()
+    macd, signal, hist = macd_full(close)
 
-    macd = ema_fast - ema_slow
-    signal = macd.ewm(span=9, adjust=False).mean()
-    hist = macd - signal
-
-    return hist.iloc[-1] > 0
+    return macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-1] > 0
 
 # =========================
 def nifty_trend_at_date(date, nifty_df):
@@ -87,7 +84,10 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
     open_ = clean(df["Open"])
 
     rsi = RSIIndicator(close).rsi()
-    hist = macd_hist(close)
+
+    # ✅ FULL MACD
+    macd_line, signal_line, hist = macd_full(close)
+
     psar = PSARIndicator(high=high, low=low, close=close).psar()
 
     data = pd.DataFrame({
@@ -97,6 +97,8 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
         "Open": open_,
         "rsi": rsi,
         "hist": hist,
+        "macd": macd_line,
+        "signal": signal_line,
         "psar": psar
     }).dropna()
 
@@ -119,7 +121,7 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
                 break
 
         # =========================
-        # 🔥 UPDATED BUY CONDITION
+        # ✅ UPDATED BUY CONDITION
         # =========================
         if (
             45 <= data["rsi"].iloc[i] <= 65 and
@@ -127,9 +129,10 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
             bullish and
             bull_count <= 15 and
             data["hist"].iloc[i] > 0 and
-            data["hist"].iloc[i] > data["hist"].iloc[i - 1] and   # NEW
-            data["Close"].iloc[i] - data["Close"].iloc[i - 1] != 0 and  # stability check
-            True  # placeholder to keep structure safe
+            data["hist"].iloc[i] > data["hist"].iloc[i - 1] and
+            data["macd"].iloc[i] > -10 and             # ✅ NEW (Pine match)
+            data["signal"].iloc[i] > 0 and             # ✅ NEW (Pine match)
+            data["Close"].iloc[i] - data["Close"].iloc[i - 1] != 0
         ):
 
             entry_price = data["Open"].iloc[i + 1]
