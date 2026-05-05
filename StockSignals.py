@@ -119,14 +119,17 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
                 break
 
         # =========================
-        # ENTRY CONDITIONS (FIXED INDENTATION)
+        # 🔥 UPDATED BUY CONDITION
         # =========================
         if (
             45 <= data["rsi"].iloc[i] <= 65 and
             data["rsi"].iloc[i] > data["rsi"].iloc[i - 1] and
             bullish and
             bull_count <= 15 and
-            data["hist"].iloc[i] > 0
+            data["hist"].iloc[i] > 0 and
+            data["hist"].iloc[i] > data["hist"].iloc[i - 1] and   # NEW
+            data["Close"].iloc[i] - data["Close"].iloc[i - 1] != 0 and  # stability check
+            True  # placeholder to keep structure safe
         ):
 
             entry_price = data["Open"].iloc[i + 1]
@@ -143,9 +146,6 @@ def get_last_trade(df, htf_df, symbol, nifty_df):
             max_days = 100
             end = min(i + 1 + max_days, len(data))
 
-            # =========================
-            # EXIT LOOP (FIXED INDENTATION)
-            # =========================
             for j in range(i + 1, end):
 
                 if data["High"].iloc[j] >= tp:
