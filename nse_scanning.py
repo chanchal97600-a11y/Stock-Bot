@@ -4,6 +4,7 @@ import numpy as np
 import time
 import gspread
 from datetime import datetime
+import pytz
 from ta.trend import PSARIndicator
 from ta.momentum import RSIIndicator
 import os
@@ -145,6 +146,7 @@ def get_data(symbol):
 # =========================
 # SCANNER (LIVE SIGNAL)
 # =========================
+india = pytz.timezone("Asia/Kolkata")
 results = []
 
 for stock in stocks:
@@ -206,7 +208,7 @@ for stock in stocks:
         results.append({
             "Stock": stock,
             "Price": round(price, 2),
-            "Date": datetime.now().strftime("%Y-%m-%d")
+            "Date": datetime.now(india).strftime("%Y-%m-%d")
         })
 
     time.sleep(0.2)
@@ -221,7 +223,7 @@ try:
     sheet = sheet_obj.worksheet("DaySAR")
 
     for row in results:
-        current_time = datetime.now().strftime("%H:%M")
+        current_time = datetime.now(india).strftime("%H:%M")
         sheet.append_row([
             row["Stock"],
             current_time,
