@@ -194,6 +194,8 @@ for idx, rec in enumerate(existing_records, start=2):
                 f"🛑 STOP LOSS"
             )
 
+            sheet.update_cell(idx, 5, "SOLD")
+
         # TIME EXIT
         elif days >= 100:
 
@@ -201,6 +203,9 @@ for idx, rec in enumerate(existing_records, start=2):
                 f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
                 f"⏳ TIME EXIT (100 Days)"
             )
+
+            sheet.update_cell(idx, 5, "SOLD")
+        
 
     except Exception as e:
         print("❌ SELL Error:", e)
