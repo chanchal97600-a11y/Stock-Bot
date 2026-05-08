@@ -211,14 +211,7 @@ for stock in stocks:
 
     time.sleep(0.2)
 
-# =========================
-# SAVE CSV
-# =========================
-if results:
-    pd.DataFrame(results).to_csv("buy_candidates.csv", index=False)
-    print("\n✅ CSV Saved")
-else:
-    print("\n🎯 No signals today")
+
 
 # =========================
 # GOOGLE SHEET UPDATE
