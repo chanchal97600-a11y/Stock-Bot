@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 import os
 from datetime import datetime
+import pytz
 import requests
 import yfinance as yf
 
@@ -57,6 +58,7 @@ creds_dict = {
 gc = gspread.service_account_from_dict(creds_dict)
 
 sheet = gc.open("PARABOLIC SAR").worksheet("DaySAR")
+india = pytz.timezone("Asia/Kolkata")
 
 # =========================
 # LOAD DATA FROM GOOGLE SHEET
@@ -84,7 +86,7 @@ if df.empty:
 # =========================
 existing_records = sheet.get_all_records()
 
-today_str = datetime.now().strftime("%Y-%m-%d")
+today_str = datetime.now(india).strftime("%Y-%m-%d")
 
 # =========================
 # BUY ALERTS ONLY
@@ -97,7 +99,7 @@ for _, row in df.iterrows():
 
     stock = str(row["Stock"]).upper().strip()
     price = float(row["Price"])
-    date = str(row["Date"])
+    date = str(row["Date"]).split(" ")[0]
 
     # Skip invalid stock names
     if stock == "" or stock == "0":
@@ -125,7 +127,7 @@ for _, row in df.iterrows():
 # =========================
 print("🔍 Checking SELL conditions...")
 
-today = datetime.now()
+today = datetime.now(india)
 
 # start=2 because Google Sheet row 1 is header
 for idx, rec in enumerate(existing_records, start=2):
