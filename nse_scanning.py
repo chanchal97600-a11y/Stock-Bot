@@ -226,8 +226,10 @@ try:
             row["Stock"],
             current_time,
             row["Price"],
-            row["Date"]
+            row["Date"],
+            "OPEN"
         ])
+        
 
     print("✅ Data pushed to Google Sheet")
 
