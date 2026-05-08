@@ -178,12 +178,10 @@ for idx, rec in enumerate(existing_records, start=2):
 
         # TARGET HIT
         if current_price >= target:
-
             send_telegram_message(
                 f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
                 f"🎯 TARGET HIT"
         )
-
         sheet.update_cell(idx, 5, "SOLD")
 
         # STOP LOSS
@@ -207,10 +205,10 @@ for idx, rec in enumerate(existing_records, start=2):
             sheet.update_cell(idx, 5, "SOLD")
         
 
-    except Exception as e:
-        print("❌ SELL Error:", e)
+        except Exception as e:
+            print("❌ SELL Error:", e)
 
-print("✅ DONE")
+        print("✅ DONE")
 
 # =========================
 # RUN StockSignals
