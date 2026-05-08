@@ -221,8 +221,10 @@ try:
     sheet = sheet_obj.worksheet("DaySAR")
 
     for row in results:
+        current_time = datetime.now().strftime("%H:%M")
         sheet.append_row([
             row["Stock"],
+            current_time,
             row["Price"],
             row["Date"]
         ])
