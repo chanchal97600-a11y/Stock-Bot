@@ -124,13 +124,3 @@ for _, row in df.iterrows():
 
 
 
-# =========================
-# RUN StockSignals
-# =========================
-try:
-    import StockSignals
-
-    StockSignals.run()
-
-except Exception as e:
-    print("❌ Error running StockSignals:", e)
