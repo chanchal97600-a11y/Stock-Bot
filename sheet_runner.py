@@ -18,6 +18,7 @@ def send_telegram_message(text):
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
     payload = {
         "chat_id": TELEGRAM_CHANNEL,
         "text": text,
@@ -27,6 +28,7 @@ def send_telegram_message(text):
     try:
         r = requests.post(url, data=payload)
         print("📨 Telegram:", r.status_code)
+
     except Exception as e:
         print("❌ Telegram error:", e)
 
@@ -35,44 +37,6 @@ def send_telegram_message(text):
 # =========================
 print("🚀 Running scanner...")
 subprocess.run(["python", "nse_scanning.py"])
-
-# =========================
-# LOAD BUY CANDIDATES
-# =========================
-if not os.path.exists("buy_candidates.csv"):
-    print("❌ buy_candidates.csv not found")
-    exit()
-
-df = pd.read_csv("buy_candidates.csv")
-
-if df.empty:
-    print("❌ No BUY candidates")
-    exit()
-
-# =========================
-# CLEAN & FILTER
-# =========================
-
-# 🔴 DO NOT include "Stock" here
-numeric_cols = ["Price", "Total Trades", "Wins", "Losses", "Timeout", "Win%"]
-
-for col in numeric_cols:
-    if col not in df.columns:
-        df[col] = 0
-
-# Convert only numeric columns
-df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
-
-# Ensure Stock is string (important fix)
-df["Stock"] = df["Stock"].astype(str)
-
-# Filter strong stocks
-df = df[(df["Win%"] >= 50) & (df["Total Trades"] >= 3)]
-
-if df.empty:
-    print("⚠️ No strong BUY → using all")
-    df = pd.read_csv("buy_candidates.csv")
-    df["Stock"] = df["Stock"].astype(str)
 
 # =========================
 # GOOGLE SHEETS AUTH
@@ -91,7 +55,29 @@ creds_dict = {
 }
 
 gc = gspread.service_account_from_dict(creds_dict)
+
 sheet = gc.open("PARABOLIC SAR").worksheet("DaySAR")
+
+# =========================
+# LOAD DATA FROM GOOGLE SHEET
+# =========================
+records = sheet.get_all_records()
+
+if not records:
+    print("❌ No data in sheet")
+    exit()
+
+df = pd.DataFrame(records)
+
+# Ensure proper types
+df["Stock"] = df["Stock"].astype(str)
+df["Price"] = pd.to_numeric(df["Price"], errors="coerce").fillna(0)
+
+print(f"📊 Loaded {len(df)} rows from Google Sheet")
+
+if df.empty:
+    print("❌ No BUY candidates")
+    exit()
 
 # =========================
 # FETCH EXISTING RECORDS
@@ -100,37 +86,39 @@ existing_records = sheet.get_all_records()
 
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-existing_today = {
-    str(r.get("Stock", "")).upper()
-    for r in existing_records
-    if str(r.get("Date", "")) == today_str
-}
+# =========================
+# BUY ALERTS ONLY
+# =========================
+print("📈 Sending BUY alerts...")
 
-# =========================
-# BUY ALERTS + SHEET UPDATE
-# =========================
-print("📈 Checking BUY signals...")
+sent_today = set()
 
 for _, row in df.iterrows():
+
     stock = str(row["Stock"]).upper().strip()
     price = float(row["Price"])
+    date = str(row["Date"])
 
     # Skip invalid stock names
     if stock == "" or stock == "0":
         continue
 
-    if stock not in existing_today:
-        send_telegram_message(f"🟢 Current Price {stock} @ ₹{price}")
+    # Send only today's signals
+    if date == today_str:
 
-        try:
-            sheet.append_row([
-                stock,
-                price,
-                today_str
-            ])
-            print(f"✅ Saved {stock} to sheet")
-        except Exception as e:
-            print("❌ Sheet update error:", e)
+        key = (stock, date)
+
+        if key not in sent_today:
+
+            send_telegram_message(
+                f"🟢 BUY SIGNAL\n"
+                f"📌 Stock: {stock}\n"
+                f"💰 Price: ₹{price}"
+            )
+
+            sent_today.add(key)
+
+            print(f"📨 Sent BUY alert: {stock}")
 
 # =========================
 # SELL LOGIC
@@ -140,17 +128,27 @@ print("🔍 Checking SELL conditions...")
 today = datetime.now()
 
 for rec in existing_records:
+
     try:
         stock = str(rec.get("Stock", "")).upper().strip()
+
         buy_price = float(rec.get("Price", 0))
+
         buy_date_str = rec.get("Date")
 
         if not stock or not buy_date_str or buy_price == 0:
             continue
 
-        buy_date = datetime.strptime(buy_date_str, "%Y-%m-%d")
+        buy_date = datetime.strptime(
+            buy_date_str,
+            "%Y-%m-%d"
+        )
 
-        data = yf.Ticker(stock + ".NS").history(period="1d")
+        # Fix .NS duplication
+        ticker = stock if stock.endswith(".NS") else stock + ".NS"
+
+        data = yf.Ticker(ticker).history(period="1d")
+
         if data.empty:
             continue
 
@@ -158,21 +156,31 @@ for rec in existing_records:
 
         target = buy_price * 1.25
         stoploss = buy_price * 0.85
+
         days = (today - buy_date).days
 
+        # TARGET HIT
         if current_price >= target:
+
             send_telegram_message(
-                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n🎯 TARGET HIT"
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
+                f"🎯 TARGET HIT"
             )
 
+        # STOP LOSS
         elif current_price <= stoploss:
+
             send_telegram_message(
-                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n🛑 STOP LOSS"
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
+                f"🛑 STOP LOSS"
             )
 
+        # TIME EXIT
         elif days >= 100:
+
             send_telegram_message(
-                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n⏳ TIME EXIT (100 Days)"
+                f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
+                f"⏳ TIME EXIT (100 Days)"
             )
 
     except Exception as e:
@@ -180,12 +188,13 @@ for rec in existing_records:
 
 print("✅ DONE")
 
-
 # =========================
-# RUN StockSignals 
+# RUN StockSignals
 # =========================
 try:
     import StockSignals
+
     StockSignals.run()
+
 except Exception as e:
     print("❌ Error running StockSignals:", e)
