@@ -221,6 +221,8 @@ for stock in stocks:
 try:
     sheet_obj = open_sheet_with_retry(gc, "PARABOLIC SAR")
     sheet = sheet_obj.worksheet("DaySAR")
+    sheet.clear()
+    sheet.append_row(["Stock","Time","Price","Date","Status"])
 
     for row in results:
         current_time = datetime.now(india).strftime("%H:%M")
