@@ -127,9 +127,23 @@ print("🔍 Checking SELL conditions...")
 
 today = datetime.now()
 
-for rec in existing_records:
+# start=2 because Google Sheet row 1 is header
+for idx, rec in enumerate(existing_records, start=2):
 
     try:
+
+        # =========================
+        # STATUS CHECK
+        # =========================
+        status = str(rec.get("Status", "OPEN")).upper()
+
+        # Skip already sold trades
+        if status == "SOLD":
+            continue
+
+        # =========================
+        # BASIC DATA
+        # =========================
         stock = str(rec.get("Stock", "")).upper().strip()
 
         buy_price = float(rec.get("Price", 0))
@@ -139,6 +153,9 @@ for rec in existing_records:
         if not stock or not buy_date_str or buy_price == 0:
             continue
 
+        # =========================
+        # BUY DATE
+        # =========================
         buy_date = datetime.strptime(
             buy_date_str,
             "%Y-%m-%d"
@@ -165,7 +182,9 @@ for rec in existing_records:
             send_telegram_message(
                 f"🔻 SELL {stock} @ ₹{current_price:.2f}\n"
                 f"🎯 TARGET HIT"
-            )
+        )
+
+    sheet.update_cell(idx, 5, "SOLD")
 
         # STOP LOSS
         elif current_price <= stoploss:
