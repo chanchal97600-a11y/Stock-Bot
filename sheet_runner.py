@@ -184,7 +184,7 @@ for idx, rec in enumerate(existing_records, start=2):
                 f"🎯 TARGET HIT"
         )
 
-    sheet.update_cell(idx, 5, "SOLD")
+        sheet.update_cell(idx, 5, "SOLD")
 
         # STOP LOSS
         elif current_price <= stoploss:
