@@ -66,7 +66,7 @@ def nifty_trend_at_date(date, nifty_df):
     close = clean(df["Close"])
     sma_100 = close.rolling(100).mean()
 
-    return "BULLISH" if close.iloc[-1] > sma_100.iloc[-1] else "BEARISH"
+    return "Bullish" if close.iloc[-1] > sma_100.iloc[-1] else "Bearish"
 
 # =========================
 def get_data(symbol):
