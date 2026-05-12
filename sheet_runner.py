@@ -100,6 +100,7 @@ today_str = datetime.now(india).strftime("%Y-%m-%d")
 print("📈 Sending BUY alerts...")
 
 sent_today = set()
+signal_found = False
 
 for _, row in df.iterrows():
 
@@ -117,6 +118,7 @@ for _, row in df.iterrows():
         key = (stock, date)
 
         if key not in sent_today:
+            signal_found = True
 
             send_telegram_message(
                 f"🟢 BUY SIGNAL\n"
@@ -127,6 +129,11 @@ for _, row in df.iterrows():
             sent_today.add(key)
 
             print(f"📨 Sent BUY alert: {stock}")
+
+if not signal_found:
+    msg = "⚠️ No BUY signals today"
+    print(msg)
+    send_telegram_message(msg)
 
 
 
