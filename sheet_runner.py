@@ -131,7 +131,7 @@ for _, row in df.iterrows():
             print(f"📨 Sent BUY alert: {stock}")
 
 if not signal_found:
-    msg = "⚠️ No BUY signals today"
+    msg = "⚠️ No BUY signals today, Wait for Tomorrow"
     print(msg)
     send_telegram_message(msg)
 
