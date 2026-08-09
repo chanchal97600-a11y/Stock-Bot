@@ -33,17 +33,20 @@ def send_telegram_message(text):
     except Exception as e:
         print("❌ Telegram error:", e)
 
-# =========================
-# RUN BACKTEST
-# =========================
-print("📊 Running StockSignals...")
-subprocess.run(["python", "StockSignals.py"])
+
 
 # =========================
 # RUN LIVE SCANNER
 # =========================
 print("🚀 Running scanner...")
 subprocess.run(["python", "nse_scanning.py"])
+
+
+# =========================
+# RUN BACKTEST
+# =========================
+print("📊 Running StockSignals...")
+subprocess.run(["python", "StockSignals.py"])
 
 # =========================
 # GOOGLE SHEETS AUTH
